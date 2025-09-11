@@ -1,0 +1,68 @@
+workflows:
+  android-auto-release:
+    name: Android Auto Release
+    max_build_duration: 90
+    triggers:
+      - push
+    environment:
+      flutter: stable
+      android:
+        build_tools: "33.0.2"
+        min_sdk: 21
+        target_sdk: 33
+      vars:
+        BUILD_TYPE: release
+        GITHUB_TAG: "v1.0.${CM_BUILD_NUMBER}" # Tag otomatis
+    scripts:
+      - name: Clean project
+        script: ./gradlew clean
+
+      - name: Install dependencies
+        script: ./gradlew build --refresh-dependencies
+
+      - name: Build APK
+        script: |
+          if [ "$BUILD_TYPE" = "release" ]; then
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
+
+      - name: Sign Release APK
+        script: |
+          if [ "$BUILD_TYPE" = "release" ]; then
+            jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+              -keystore $KEYSTORE_FILE \
+              -storepass $KEYSTORE_PASSWORD \
+              -keypass $KEY_PASSWORD \
+              app/build/outputs/apk/release/app-release-unsigned.apk $KEY_ALIAS
+          fi
+
+      - name: Align APK
+        script: |
+          if [ "$BUILD_TYPE" = "release" ]; then
+            $ANDROID_HOME/build-tools/33.0.2/zipalign -v 4 \
+              app/build/outputs/apk/release/app-release-unsigned.apk \
+              app/build/outputs/apk/release/app-release.apk
+          fi
+
+      - name: Create GitHub Release
+        script: |
+          echo "Checking if release exists..."
+          RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$GITHUB_TAG" | jq -r '.id')
+          if [ "$RELEASE_ID" = "null" ]; then
+            echo "Creating new GitHub Release..."
+            RESPONSE=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -d "{\"tag_name\":\"$GITHUB_TAG\",\"name\":\"$GITHUB_TAG\",\"body\":\"Release $GITHUB_TAG\"}" \
+              "https://api.github.com/repos/$GITHUB_REPO/releases")
+            RELEASE_ID=$(echo $RESPONSE | jq -r '.id')
+          fi
+          echo "Uploading APK to GitHub Release..."
+          curl -H "Authorization: token $GITHUB_TOKEN" \
+               -H "Content-Type: application/octet-stream" \
+               --data-binary @app/build/outputs/apk/release/app-release.apk \
+               "https://uploads.github.com/repos/$GITHUB_REPO/releases/$RELEASE_ID/assets?name=app-release.apk"
+
+    artifacts:
+      - build/app/outputs/**/*.apk
