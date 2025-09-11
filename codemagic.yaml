@@ -2,14 +2,8 @@ workflows:
   android-auto-release:
     name: Android Auto Release
     max_build_duration: 90
-    triggers:
-      - push
     environment:
       flutter: stable
-      android:
-        build_tools: "33.0.2"
-        min_sdk: 21
-        target_sdk: 33
       vars:
         BUILD_TYPE: release
         GITHUB_TAG: "v1.0.${CM_BUILD_NUMBER}" # Tag otomatis
@@ -46,7 +40,7 @@ workflows:
               app/build/outputs/apk/release/app-release.apk
           fi
 
-      - name: Create GitHub Release
+      - name: Upload to GitHub Release
         script: |
           echo "Checking if release exists..."
           RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
