@@ -29,15 +29,22 @@ workflows:
               -keystore $KEYSTORE_FILE \
               -storepass $KEYSTORE_PASSWORD \
               -keypass $KEY_PASSWORD \
-              app/build/outputs/apk/release/app-release-unsigned.apk $KEY_ALIAS
+              build/app/outputs/flutter-apk/app-release.apk $KEY_ALIAS
           fi
 
       - name: Align APK
         script: |
           if [ "$BUILD_TYPE" = "release" ]; then
             $ANDROID_HOME/build-tools/33.0.2/zipalign -v 4 \
-              app/build/outputs/apk/release/app-release-unsigned.apk \
-              app/build/outputs/apk/release/app-release.apk
+              build/app/outputs/flutter-apk/app-release.apk \
+              build/app/outputs/flutter-apk/app-release-aligned.apk
+          fi
+
+      - name: Verify APK Signature
+        script: |
+          if [ "$BUILD_TYPE" = "release" ]; then
+            $ANDROID_HOME/build-tools/33.0.2/apksigner verify \
+              build/app/outputs/flutter-apk/app-release-aligned.apk
           fi
 
       - name: Upload to GitHub Release
@@ -55,7 +62,7 @@ workflows:
           echo "Uploading APK to GitHub Release..."
           curl -H "Authorization: token $GITHUB_TOKEN" \
                -H "Content-Type: application/octet-stream" \
-               --data-binary @app/build/outputs/apk/release/app-release.apk \
+               --data-binary @build/app/outputs/flutter-apk/app-release-aligned.apk \
                "https://uploads.github.com/repos/$GITHUB_REPO/releases/$RELEASE_ID/assets?name=app-release.apk"
 
     artifacts:
